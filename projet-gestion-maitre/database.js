@@ -1,6 +1,6 @@
 const path = require('path');
-const Database = require('better-sqlite3');
-const bcrypt = require('bcrypt');
+const Database = require('./working-sync-db');
+const CryptoAdapter = require('./src/utils/CryptoAdapter');
 const saltRounds = 10;
 const fs = require('fs');
 const os = require('os');
@@ -69,6 +69,8 @@ if (!fs.existsSync(dbPath)) {
 
 const db = new Database(dbPath);
 console.log(`🗄️ Base de données initialisée: ${dbPath}`);
+
+// Plus besoin de fonctions utilitaires - le remplacement direct fonctionne
 
 function initDatabase() {
     db.exec(`
@@ -637,20 +639,18 @@ function initDatabase() {
 
     const ownerExists = db.prepare("SELECT id FROM users WHERE username = 'proprietaire'").get();
     if (!ownerExists) {
-        const passwordHash = bcrypt.hashSync('admin', saltRounds);
+        const passwordHash = CryptoAdapter.hashSync('admin', saltRounds);
         db.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'Propriétaire')").run('proprietaire', passwordHash);
     }
     db.prepare("INSERT INTO clients (id, name, ice) SELECT 1, 'Client de passage', null WHERE NOT EXISTS (SELECT 1 FROM clients WHERE id = 1)").run();
 }
 
-const addProduct = (product) => { 
-    const stmt = db.prepare("INSERT INTO products (barcode, name, purchase_price, price_retail, price_wholesale, price_carton, pieces_per_carton, stock, alert_threshold, category, image_path) VALUES (@barcode, @name, @purchase_price, @price_retail, @price_wholesale, @price_carton, @pieces_per_carton, @stock, @alert_threshold, @category, @image_path)"); 
+const addProduct = (product) => { const stmt = db.prepare("INSERT INTO products (barcode, name, purchase_price, price_retail, price_wholesale, price_carton, pieces_per_carton, stock, alert_threshold, category, image_path) VALUES (@barcode, @name, @purchase_price, @price_retail, @price_wholesale, @price_carton, @pieces_per_carton, @stock, @alert_threshold, @category, @image_path)"); 
     const info = stmt.run({ ...product, barcode: product.barcode || null, purchase_price: product.purchase_price || 0, price_carton: product.price_carton || 0, pieces_per_carton: product.pieces_per_carton || 0, image_path: product.image_path || null }); 
     return { id: info.lastInsertRowid, ...product }; 
 };
 
-const updateProduct = (product) => {
-    const stmt = db.prepare("UPDATE products SET barcode = @barcode, name = @name, purchase_price = @purchase_price, price_retail = @price_retail, price_wholesale = @price_wholesale, price_carton = @price_carton, pieces_per_carton = @pieces_per_carton, stock = @stock, alert_threshold = @alert_threshold, category = @category, image_path = @image_path WHERE id = @id");
+const updateProduct = (product) => { const stmt = db.prepare("UPDATE products SET barcode = @barcode, name = @name, purchase_price = @purchase_price, price_retail = @price_retail, price_wholesale = @price_wholesale, price_carton = @price_carton, pieces_per_carton = @pieces_per_carton, stock = @stock, alert_threshold = @alert_threshold, category = @category, image_path = @image_path WHERE id = @id");
     stmt.run({ ...product, barcode: product.barcode || null, purchase_price: product.purchase_price || 0, price_carton: product.price_carton || 0, pieces_per_carton: product.pieces_per_carton || 0, image_path: product.image_path || null });
     return true;
 };
@@ -664,15 +664,14 @@ const updateProductThreshold = (id, threshold) => {
 const deleteProduct = (id) => { db.prepare("DELETE FROM products WHERE id = ?").run(id); return true; };
 
 // ===== REQUÊTES OPTIMISÉES AVEC INDEX ET LIMIT =====
-const getAllProducts = (searchTerm = '', limit = 1000) => {
-    if (searchTerm && searchTerm.trim()) {
+const getAllProducts = (searchTerm = '', limit = 1000) => { if (searchTerm && searchTerm.trim()) {
         // Recherche optimisée avec index sur name et barcode
         return db.prepare(`
             SELECT * FROM products
             WHERE name LIKE ? OR barcode LIKE ?
             ORDER BY name ASC
             LIMIT ?
-        `).all(`%${searchTerm}%`, `%${searchTerm}%`, limit);
+        `).all(`%${searchTerm }%`, `%${searchTerm}%`, limit);
     }
     // Sans recherche, limiter quand même pour éviter les surcharges
     return db.prepare("SELECT * FROM products ORDER BY name ASC LIMIT ?").all(limit);
@@ -699,12 +698,16 @@ const getLowStockProducts = () => {
         ORDER BY (alert_threshold - stock) DESC
     `).all();
 };
-const adjustStock = db.transaction((adjustments, reason, userId) => { const updateStmt = db.prepare('UPDATE products SET stock = ? WHERE id = ?'); const logStmt = db.prepare('INSERT INTO stock_adjustments (product_id, user_id, old_quantity, new_quantity, reason) VALUES (?, ?, ?, ?, ?)'); for (const adj of adjustments) { updateStmt.run(adj.newQuantity, adj.productId); logStmt.run(adj.productId, userId, adj.oldQuantity, adj.newQuantity, reason); } return { success: true }; });
-const addClient = (client) => {
-    // Validation des champs obligatoires
-    if (!client.name || client.name.trim() === '') {
-        throw new Error('VALIDATION_ERROR:Le nom du client est obligatoire');
+const adjustStock = db.transaction(async (adjustments, reason, userId) => {
+    for (const adj of adjustments) {
+        db.run('UPDATE products SET stock = ? WHERE id = ?', [adj.newQuantity, adj.productId]);
+        db.run('INSERT INTO stock_adjustments (product_id, user_id, old_quantity, new_quantity, reason) VALUES (?, ?, ?, ?, ?)', [adj.productId, userId, adj.oldQuantity, adj.newQuantity, reason]);
     }
+    return { success: true };
+});
+const addClient = (client) => { // Validation des champs obligatoires
+    if (!client.name || client.name.trim() === '') {
+        throw new Error('VALIDATION_ERROR:Le nom du client est obligatoire'); }
 
     // Nettoyer les données
     const cleanClient = {
@@ -825,15 +828,14 @@ const updateClient = (client) => { db.prepare("UPDATE clients SET name = ?, phon
 const deleteClient = (id) => { if (id === 1) return false; db.prepare("DELETE FROM clients WHERE id = ?").run(id); return true; };
 
 // ===== REQUÊTES CLIENTS OPTIMISÉES =====
-const getAllClients = (searchTerm = '', limit = 1000) => {
-    if (searchTerm && searchTerm.trim()) {
+const getAllClients = (searchTerm = '', limit = 1000) => { if (searchTerm && searchTerm.trim()) {
         // Recherche optimisée avec index sur name et phone
         return db.prepare(`
             SELECT * FROM clients
             WHERE name LIKE ? OR phone LIKE ?
             ORDER BY name ASC
             LIMIT ?
-        `).all(`%${searchTerm}%`, `%${searchTerm}%`, limit);
+        `).all(`%${searchTerm }%`, `%${searchTerm}%`, limit);
     }
     // Sans recherche, limiter pour éviter les surcharges
     return db.prepare("SELECT * FROM clients ORDER BY name ASC LIMIT ?").all(limit);
@@ -2095,7 +2097,7 @@ const editSale = db.transaction((originalSaleId, newSaleData) => {
     return { success: true, saleId: newSaleId, ticketNumber: ticketNumber };
 });
 const processReturn = db.transaction((originalSaleId, itemsToReturn, clientId) => { const originalSale = db.prepare('SELECT * FROM sales WHERE id = ?').get(originalSaleId); if (!originalSale) { throw new Error("Vente originale introuvable."); } let totalRefundAmount = 0; for (const item of itemsToReturn) { totalRefundAmount += item.quantity * item.unit_price; } if (totalRefundAmount <= 0) { throw new Error("Aucun article valide à retourner."); } const returnSaleStmt = db.prepare(`INSERT INTO sales (client_id, user_id, total_amount, amount_paid_cash, amount_paid_credit, status) VALUES (?, ?, ?, ?, ?, ?)`); const returnResult = returnSaleStmt.run(clientId, originalSale.user_id, -totalRefundAmount, 0, -totalRefundAmount, 'RETURNED'); const returnSaleId = returnResult.lastInsertRowid; const updateStockStmt = db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?'); const insertReturnItemStmt = db.prepare(`INSERT INTO sale_items (sale_id, product_id, quantity, unit, unit_price, line_total, purchase_price) VALUES (?, ?, ?, ?, ?, ?, ?)`); for (const item of itemsToReturn) { const originalItem = db.prepare('SELECT purchase_price FROM sale_items WHERE sale_id = ? AND product_id = ?').get(originalSaleId, item.product_id); insertReturnItemStmt.run(returnSaleId, item.product_id, -item.quantity, item.unit || 'piece', item.unit_price, -item.quantity * item.unit_price, originalItem ? originalItem.purchase_price : 0); } if (clientId !== 1) { const updateCreditStmt = db.prepare('UPDATE clients SET credit_balance = credit_balance - ? WHERE id = ?'); updateCreditStmt.run(totalRefundAmount, clientId); } db.prepare(`UPDATE sales SET status = 'RETURNED' WHERE id = ?`).run(originalSaleId); return { success: true, returnSaleId }; });
-const getDebtors = () => db.prepare(`SELECT id, name, phone, credit_balance FROM clients WHERE credit_balance > 0.01 ORDER BY name ASC`).all();
+const getDebtors = () => { return db.all(`SELECT id, name, phone, credit_balance FROM clients WHERE credit_balance > 0.01 ORDER BY name ASC`); };
 const getClientCredit = (clientId) => {
     const result = db.prepare(`SELECT credit_balance FROM clients WHERE id = ?`).get(clientId);
     return result ? result.credit_balance : 0;
@@ -2154,16 +2156,29 @@ const saveCompanyInfo = (info) => {
     }
     return { success: true };
 };
-const authenticateUser = (username, password) => { const user = db.prepare("SELECT * FROM users WHERE username = ?").get(username); if (user && bcrypt.compareSync(password, user.password_hash)) { const { password_hash, ...userWithoutHash } = user; return userWithoutHash; } return null; };
-const getAllUsers = () => db.prepare("SELECT id, username, role FROM users WHERE role = 'Vendeur'").all();
-const addUser = (username, password) => { db.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'Vendeur')").run(username, bcrypt.hashSync(password, saltRounds)); return true; };
-const updateUserPassword = (id, password) => { db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(bcrypt.hashSync(password, saltRounds), id); return true; };
-const deleteUser = (id) => { db.prepare("DELETE FROM users WHERE id = ?").run(id); return true; };
+const authenticateUser = (username, password) => {
+    const user = db.get("SELECT * FROM users WHERE username = ?", [username]);
+    if (user && CryptoAdapter.compareSync(password, user.password_hash)) {
+        const { password_hash, ...userWithoutHash } = user;
+        return userWithoutHash;
+    }
+    return null;
+};
+const getAllUsers = () => { return db.all("SELECT id, username, role FROM users WHERE role = 'Vendeur'"); };
+const addUser = (username, password) => {
+    db.run("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'Vendeur')", [username, CryptoAdapter.hashSync(password, saltRounds)]);
+    return true;
+};
+const updateUserPassword = (id, password) => {
+    db.run("UPDATE users SET password_hash = ? WHERE id = ?", [CryptoAdapter.hashSync(password, saltRounds), id]);
+    return true;
+};
+const deleteUser = (id) => { db.run("DELETE FROM users WHERE id = ?", [id]); return true; };
 const updateUserCredentials = (data) => {
     const { id, currentUsername, newUsername, currentPassword, newPassword } = data;
     const user = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
     if (!user) { throw new Error("Utilisateur non trouvé."); }
-    const isPasswordCorrect = bcrypt.compareSync(currentPassword, user.password_hash);
+    const isPasswordCorrect = CryptoAdapter.compareSync(currentPassword, user.password_hash);
     if (!isPasswordCorrect) { throw new Error("Le mot de passe actuel est incorrect."); }
     const isUsernameChanged = newUsername && newUsername !== currentUsername;
     const isPasswordChanged = newPassword && newPassword.length > 0;
@@ -2181,7 +2196,7 @@ const updateUserCredentials = (data) => {
     if (isPasswordChanged) {
         if (isUsernameChanged) sql += ', ';
         sql += 'password_hash = ?';
-        const newPasswordHash = bcrypt.hashSync(newPassword, saltRounds);
+        const newPasswordHash = CryptoAdapter.hashSync(newPassword, saltRounds);
         params.push(newPasswordHash);
     }
     sql += ' WHERE id = ?';

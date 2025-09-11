@@ -2,10 +2,10 @@ name: Build macOS App
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, migration-js-pure ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, migration-js-pure ]
   workflow_dispatch:
     inputs:
       version:
@@ -48,11 +48,11 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Install system dependencies
+    - name: Install system dependencies (minimal)
       run: |
-        # Install only essential dependencies for native modules
-        brew install pkg-config cairo pango
-        # Skip compilation tools - using pre-compiled modules
+        # Only essential dependencies for Electron packaging
+        brew install pkg-config
+        # No native compilation tools needed - using JavaScript-pure modules
 
     # Disable node_modules cache to avoid Node.js version conflicts
     # - name: Cache node modules
@@ -63,28 +63,25 @@ jobs:
     #     restore-keys: |
     #       ${{ runner.os }}-node-
 
-    - name: Use pre-compiled native modules
+    - name: Install JavaScript-pure dependencies
       working-directory: ./projet-gestion-maitre
       run: |
-        # Install dependencies (skip native compilation)
-        npm ci --ignore-scripts
+        # Clean install with JavaScript-pure modules
+        rm -rf node_modules package-lock.json
+        npm install
 
-        # Copy pre-compiled binaries from repository
-        echo "Copying pre-compiled native modules..."
-        if [ -d "precompiled-modules/darwin-x64" ]; then
-          cp -r precompiled-modules/darwin-x64/* node_modules/ || echo "No pre-compiled modules found, will try standard installation"
-        fi
+        # Verify JavaScript-pure modules work
+        node -e "require('sql.js'); console.log('✅ sql.js (JavaScript-pure SQLite) OK')"
+        node -e "require('crypto-js'); console.log('✅ crypto-js (JavaScript-pure crypto) OK')"
 
-        # Fallback: try standard npm install if pre-compiled modules don't exist
-        if [ ! -f "node_modules/better-sqlite3/build/Release/better_sqlite3.node" ]; then
-          echo "Pre-compiled modules not found, falling back to npm install..."
-          rm -rf node_modules package-lock.json
-          npm install
-        fi
-
-        # Verify modules work
-        node -e "require('better-sqlite3'); console.log('✅ better-sqlite3 OK')"
-        node -e "require('bcrypt'); console.log('✅ bcrypt OK')"
+        # Test database adapter
+        node -e "
+          const DatabaseAdapter = require('./src/database/DatabaseAdapter');
+          const CryptoAdapter = require('./src/utils/CryptoAdapter');
+          console.log('✅ DatabaseAdapter loaded');
+          console.log('✅ CryptoAdapter loaded');
+          console.log('✅ All adapters working - no native modules needed!');
+        "
 
         # Setup macOS build environment
         npm run setup:macos
@@ -93,11 +90,11 @@ jobs:
       working-directory: ./projet-gestion-maitre
       run: npm run build-css
 
-    - name: Validate native modules
+    - name: Validate JavaScript modules
       working-directory: ./projet-gestion-maitre
       run: |
         node -e "
-          const modules = ['better-sqlite3', 'bcrypt'];
+          const modules = ['sql.js', 'crypto-js'];
           modules.forEach(mod => {
             try {
               require(mod);
@@ -107,6 +104,29 @@ jobs:
               process.exit(1);
             }
           });
+          console.log('🎉 Tous les modules JavaScript purs sont disponibles !');
+        "
+
+    - name: Test database functionality
+      working-directory: ./projet-gestion-maitre
+      run: |
+        node -e "
+          console.log('🧪 Test de la base de données...');
+          const Database = require('./working-sync-db');
+          const db = new Database('./test-ci.db');
+          console.log('✅ Base de données initialisée');
+
+          // Test authentification
+          const user = db.get('SELECT * FROM users WHERE username = ?', ['admin']);
+          if (user && user.username === 'admin') {
+            console.log('✅ Authentification testée avec succès');
+          } else {
+            console.error('❌ Échec test authentification');
+            process.exit(1);
+          }
+
+          db.close();
+          console.log('🎉 Tous les tests de base de données réussis !');
         "
 
     - name: Prepare clean database

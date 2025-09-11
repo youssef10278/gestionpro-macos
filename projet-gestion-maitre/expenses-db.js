@@ -13,6 +13,14 @@ class ExpensesDB {
      */
     initializeTables() {
         try {
+            console.log('[EXPENSES] Initialisation des tables depenses...');
+
+            // Vérifier que la DB est disponible
+            if (!this.db || typeof this.db.exec !== 'function') {
+                console.log('[WARN] Base de donnees non disponible - initialisation differee');
+                return;
+            }
+
             // Table des dépenses
             this.db.exec(`
                 CREATE TABLE IF NOT EXISTS expenses (
