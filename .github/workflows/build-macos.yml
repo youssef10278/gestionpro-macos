@@ -1,0 +1,123 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (optional)'
+        required: false
+        default: ''
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+        build-type: [intel, universal]
+        include:
+          - build-type: intel
+            build-command: dist:mac
+            artifact-suffix: intel
+          - build-type: universal
+            build-command: dist:mac-universal
+            artifact-suffix: universal
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: 'projet-gestion-maitre/package-lock.json'
+    
+    - name: Setup Python (for native modules)
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install system dependencies
+      run: |
+        # Install build tools needed for native modules
+        brew install pkg-config cairo pango libpng jpeg giflib librsvg
+        # Install additional tools for icon generation
+        brew install librsvg
+
+    - name: Cache node modules
+      uses: actions/cache@v3
+      with:
+        path: projet-gestion-maitre/node_modules
+        key: ${{ runner.os }}-node-${{ hashFiles('projet-gestion-maitre/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - name: Install dependencies
+      working-directory: ./projet-gestion-maitre
+      run: |
+        npm ci
+        # Setup macOS build environment
+        npm run setup:macos
+    
+    - name: Build CSS
+      working-directory: ./projet-gestion-maitre
+      run: npm run build-css
+    
+    - name: Prepare clean database
+      working-directory: ./projet-gestion-maitre
+      run: npm run create-clean-db
+    
+    - name: Build macOS app (${{ matrix.build-type }})
+      working-directory: ./projet-gestion-maitre
+      run: npm run ${{ matrix.build-command }}
+      env:
+        NODE_ENV: production
+        # Disable code signing for now (can be enabled later with certificates)
+        CSC_IDENTITY_AUTO_DISCOVERY: false
+        # Optimize build for CI
+        ELECTRON_BUILDER_CACHE: /tmp/electron-builder-cache
+    
+    - name: List build artifacts
+      working-directory: ./projet-gestion-maitre
+      run: |
+        echo "Build artifacts:"
+        ls -la dist/
+        if [ -d "dist/mac" ]; then
+          echo "macOS build contents:"
+          ls -la dist/mac/
+        fi
+        if [ -d "dist/mac-universal" ]; then
+          echo "macOS universal build contents:"
+          ls -la dist/mac-universal/
+        fi
+    
+    - name: Upload macOS artifacts (${{ matrix.artifact-suffix }})
+      uses: actions/upload-artifact@v4
+      with:
+        name: gestionpro-macos-${{ matrix.artifact-suffix }}-${{ github.sha }}
+        path: |
+          projet-gestion-maitre/dist/*.dmg
+          projet-gestion-maitre/dist/*.zip
+          projet-gestion-maitre/dist/mac/**/*
+          projet-gestion-maitre/dist/mac-universal/**/*
+        retention-days: 30
+    
+    - name: Upload build logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-macos-${{ github.sha }}
+        path: |
+          projet-gestion-maitre/npm-debug.log*
+          projet-gestion-maitre/yarn-error.log*
+        retention-days: 7
