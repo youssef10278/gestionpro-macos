@@ -39,9 +39,8 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
-        # Disable npm cache for now since package-lock.json is not in the expected location
-        # cache: 'npm'
-        # cache-dependency-path: 'projet-gestion-maitre/package-lock.json'
+        cache: 'npm'
+        cache-dependency-path: 'projet-gestion-maitre/package-lock.json'
     
     - name: Setup Python (for native modules)
       uses: actions/setup-python@v4
@@ -50,22 +49,23 @@ jobs:
     
     - name: Install system dependencies
       run: |
-        # Install only essential dependencies for native modules
-        brew install pkg-config cairo pango
-        # Skip optional dependencies to reduce build time
+        # Install build tools needed for native modules
+        brew install pkg-config cairo pango libpng jpeg giflib librsvg
+        # Install additional tools for icon generation
+        brew install librsvg
 
     - name: Cache node modules
       uses: actions/cache@v3
       with:
         path: projet-gestion-maitre/node_modules
-        key: ${{ runner.os }}-node-${{ hashFiles('projet-gestion-maitre/package.json') }}
+        key: ${{ runner.os }}-node-${{ hashFiles('projet-gestion-maitre/package-lock.json') }}
         restore-keys: |
           ${{ runner.os }}-node-
 
     - name: Install dependencies
       working-directory: ./projet-gestion-maitre
       run: |
-        npm install
+        npm ci
         # Setup macOS build environment
         npm run setup:macos
     

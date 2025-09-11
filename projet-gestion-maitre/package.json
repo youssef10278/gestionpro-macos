@@ -1,0 +1,151 @@
+{
+  "name": "projet-gestion-maitre",
+  "version": "2.1.0",
+  "description": "Application de bureau Maître pour la gestion complète.",
+  "main": "main.js",
+  "scripts": {
+    "start": "node_modules\\.bin\\electron . || node_modules\\electron\\dist\\electron.exe . || npx electron .",
+    "watch:css": "tailwindcss -i ./src/css/input.css -o ./src/css/output.css --watch",
+    "dev:electron": "nodemon --exec \"electron .\"",
+    "dev": "concurrently \"npm:watch:css\" \"npm:dev:electron\"",
+    "rebuild": "electron-rebuild",
+    "fix-modules": "npm rebuild && electron-rebuild",
+    "test-tva": "node test-tva-system.js",
+    "demo-tva": "node demo-tva-system.js",
+    "validate-build": "node validate-build.js",
+    "verify-installer": "node verify-installer.js",
+    "postinstall": "electron-rebuild",
+    "build-css": "tailwindcss -i ./src/css/input.css -o ./src/css/output.css --minify",
+    "prepare-build": "node prepare-build.js",
+    "create-clean-db": "node create-clean-db.js",
+    "prebuild": "npm run build-css && npm run prepare-build",
+    "dist": "npm run create-clean-db && electron-builder",
+    "dist:mac": "npm run create-clean-db && electron-builder --mac",
+    "dist:mac-universal": "npm run create-clean-db && electron-builder --mac --universal",
+    "dist:all": "npm run create-clean-db && electron-builder --mac --win",
+    "dist-client": "npm run force-clean-db && npm run build-css && electron-builder",
+    "force-clean-db": "npx electron create-clean-with-electron.js",
+    "setup:macos": "node build/setup-macos-build.js",
+    "predist:mac": "npm run setup:macos && npm run build-css",
+    "predist:mac-universal": "npm run setup:macos && npm run build-css"
+  },
+  "nodemonConfig": {
+    "ignore": [
+      "database/*",
+      "src/css/output.css"
+    ],
+    "delay": 1500
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.10.0",
+    "bcrypt": "^5.1.1",
+    "better-sqlite3": "^12.2.0",
+    "node-fetch": "^3.3.2",
+    "node-machine-id": "^1.1.12"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "electron-rebuild": "^3.2.9",
+    "nodemon": "^3.1.4",
+    "tailwindcss": "^3.4.4"
+  },
+  "build": {
+    "appId": "com.gestionpro.app",
+    "productName": "GestionPro",
+    "asar": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "database.js",
+      "config.js",
+      "license-manager-electron.js",
+      "expenses-db.js",
+      "login.html",
+      "login.js",
+      "activation.html",
+      "activation.js",
+      "startup.html",
+      "src/**/*",
+      "database/main-clean.db",
+      "node_modules/**/*",
+      "!node_modules/.cache/**/*",
+      "!database/main.db",
+      "!database/main.db-shm",
+      "!database/main.db-wal"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "category": "public.app-category.business",
+      "icon": "src/assets/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "publisherName": "GestionPro",
+      "verifyUpdateCodeSignature": false
+    },
+    "dmg": {
+      "title": "GestionPro ${version}",
+      "icon": "src/assets/icon.icns",
+      "background": "build/dmg-background.png",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220,
+          "type": "file"
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "artifactName": "GestionPro-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GestionPro",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "menuCategory": "Business",
+      "artifactName": "GestionPro-Setup-${version}.${ext}",
+      "license": "LICENSE.txt"
+    }
+  }
+}
