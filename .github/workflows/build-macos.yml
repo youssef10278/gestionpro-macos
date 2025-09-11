@@ -2,10 +2,10 @@ name: Build macOS App
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, migration-js-pure ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, migration-js-pure ]
   workflow_dispatch:
     inputs:
       version:
@@ -90,11 +90,11 @@ jobs:
       working-directory: ./projet-gestion-maitre
       run: npm run build-css
 
-    - name: Validate native modules
+    - name: Validate JavaScript modules
       working-directory: ./projet-gestion-maitre
       run: |
         node -e "
-          const modules = ['better-sqlite3', 'bcrypt'];
+          const modules = ['sql.js', 'crypto-js'];
           modules.forEach(mod => {
             try {
               require(mod);
@@ -104,6 +104,29 @@ jobs:
               process.exit(1);
             }
           });
+          console.log('🎉 Tous les modules JavaScript purs sont disponibles !');
+        "
+
+    - name: Test database functionality
+      working-directory: ./projet-gestion-maitre
+      run: |
+        node -e "
+          console.log('🧪 Test de la base de données...');
+          const Database = require('./working-sync-db');
+          const db = new Database('./test-ci.db');
+          console.log('✅ Base de données initialisée');
+
+          // Test authentification
+          const user = db.get('SELECT * FROM users WHERE username = ?', ['admin']);
+          if (user && user.username === 'admin') {
+            console.log('✅ Authentification testée avec succès');
+          } else {
+            console.error('❌ Échec test authentification');
+            process.exit(1);
+          }
+
+          db.close();
+          console.log('🎉 Tous les tests de base de données réussis !');
         "
 
     - name: Prepare clean database
