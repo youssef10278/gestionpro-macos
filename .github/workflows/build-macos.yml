@@ -50,25 +50,20 @@ jobs:
     
     - name: Setup native compilation environment
       run: |
-        # Install Python and essential build tools
-        brew install python@3.11 pkg-config cairo pango
+        # Install essential build tools only
+        brew install pkg-config cairo pango
 
-        # Install node-gyp globally (not available via brew)
+        # Use system Python (already available on macOS runners)
+        echo "Using system Python:"
+        python3 --version
+        which python3
+
+        # Install node-gyp globally
         npm install -g node-gyp
-
-        # Configure Python for node-gyp (correct syntax)
-        npm config set python $(which python3.11)
-
-        # Set environment variables for native compilation
-        export PYTHON=$(which python3.11)
 
         # Verify installation
         echo "node-gyp version:"
         node-gyp --version
-        echo "Python version:"
-        python3.11 --version
-        echo "Python path for npm:"
-        npm config get python
 
     # Disable node_modules cache to avoid Node.js version conflicts
     # - name: Cache node modules
@@ -79,21 +74,17 @@ jobs:
     #     restore-keys: |
     #       ${{ runner.os }}-node-
 
-    - name: Force native modules compilation
+    - name: Install and rebuild native modules (simplified)
       working-directory: ./projet-gestion-maitre
       run: |
         # Complete clean
-        rm -rf node_modules package-lock.json ~/.npm
+        rm -rf node_modules package-lock.json
 
-        # Install without scripts
-        npm ci --ignore-scripts
+        # Fresh install
+        npm install
 
-        # Force recompile from source
-        npm rebuild --build-from-source better-sqlite3
-        npm rebuild --build-from-source bcrypt
-
-        # Run postinstall scripts
-        npm run postinstall
+        # Use electron-rebuild (most reliable for Electron apps)
+        npx electron-rebuild --force
 
         # Verify modules work
         node -e "console.log('better-sqlite3:', require('better-sqlite3'))"
