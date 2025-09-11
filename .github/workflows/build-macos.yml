@@ -48,11 +48,17 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Install system dependencies
+    - name: Setup native compilation environment
       run: |
-        # Install only essential dependencies for native modules
+        # Install compilation tools
+        brew install python@3.11 node-gyp
+        npm install -g node-gyp
+
+        # Configure Python for node-gyp
+        npm config set python python3.11
+
+        # Install essential dependencies for native modules
         brew install pkg-config cairo pango
-        # Skip optional dependencies to reduce build time
 
     # Disable node_modules cache to avoid Node.js version conflicts
     # - name: Cache node modules
@@ -63,20 +69,21 @@ jobs:
     #     restore-keys: |
     #       ${{ runner.os }}-node-
 
-    - name: Install and rebuild native modules
+    - name: Force native modules compilation
       working-directory: ./projet-gestion-maitre
       run: |
-        # Clean slate
-        rm -rf node_modules package-lock.json
+        # Complete clean
+        rm -rf node_modules package-lock.json ~/.npm
 
-        # Install dependencies
-        npm install
+        # Install without scripts
+        npm ci --ignore-scripts
 
-        # Install electron-rebuild globally
-        npm install -g electron-rebuild
+        # Force recompile from source
+        npm rebuild --build-from-source better-sqlite3
+        npm rebuild --build-from-source bcrypt
 
-        # Force rebuild ALL native modules for Electron 28.3.3
-        electron-rebuild --version=28.3.3 --force --arch=x64
+        # Run postinstall scripts
+        npm run postinstall
 
         # Verify modules work
         node -e "console.log('better-sqlite3:', require('better-sqlite3'))"
