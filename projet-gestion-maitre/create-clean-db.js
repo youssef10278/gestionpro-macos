@@ -1,9 +1,28 @@
 const path = require('path');
-const Database = require('better-sqlite3');
-const bcrypt = require('bcrypt');
 const fs = require('fs');
 
 console.log('🧹 Création d\'une base de données vierge pour les clients...');
+
+// Test des modules natifs avec gestion d'erreur
+let Database, bcrypt;
+
+try {
+    Database = require('better-sqlite3');
+    console.log('✅ better-sqlite3 loaded successfully');
+} catch (error) {
+    console.error('❌ Failed to load better-sqlite3:', error.message);
+    console.error('Make sure native modules are properly compiled for your Node.js version');
+    process.exit(1);
+}
+
+try {
+    bcrypt = require('bcrypt');
+    console.log('✅ bcrypt loaded successfully');
+} catch (error) {
+    console.error('❌ Failed to load bcrypt:', error.message);
+    console.error('Make sure native modules are properly compiled for your Node.js version');
+    process.exit(1);
+}
 
 // Chemin vers la base de données vierge
 const cleanDbPath = path.join(__dirname, 'database', 'main-clean.db');

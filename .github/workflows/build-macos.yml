@@ -77,16 +77,48 @@ jobs:
         npm rebuild better-sqlite3
         npm rebuild bcrypt
 
+        # Verify native modules are working
+        echo "Testing better-sqlite3..."
+        node -e "console.log('better-sqlite3 version:', require('better-sqlite3'))"
+
         # Setup macOS build environment
         npm run setup:macos
-    
+
     - name: Build CSS
       working-directory: ./projet-gestion-maitre
       run: npm run build-css
-    
+
     - name: Prepare clean database
       working-directory: ./projet-gestion-maitre
-      run: npm run create-clean-db
+      run: |
+        echo "Preparing clean database with rebuilt native modules..."
+
+        # Test if better-sqlite3 is working before running the script
+        echo "Testing better-sqlite3 module..."
+        node -e "
+          try {
+            const Database = require('better-sqlite3');
+            console.log('✅ better-sqlite3 is working correctly');
+          } catch (error) {
+            console.error('❌ better-sqlite3 error:', error.message);
+            process.exit(1);
+          }
+        "
+
+        # Test if bcrypt is working
+        echo "Testing bcrypt module..."
+        node -e "
+          try {
+            const bcrypt = require('bcrypt');
+            console.log('✅ bcrypt is working correctly');
+          } catch (error) {
+            console.error('❌ bcrypt error:', error.message);
+            process.exit(1);
+          }
+        "
+
+        # Now run the database creation script
+        npm run create-clean-db
     
     - name: Build macOS app (${{ matrix.build-type }})
       working-directory: ./projet-gestion-maitre
