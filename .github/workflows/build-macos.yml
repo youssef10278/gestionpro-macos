@@ -63,9 +63,21 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-node-
 
+    - name: Debug - List repository structure
+      run: |
+        echo "=== Repository root ==="
+        ls -la
+        echo "=== Looking for projet-gestion-maitre ==="
+        ls -la projet-gestion-maitre/ || echo "projet-gestion-maitre not found"
+        echo "=== Looking for package.json ==="
+        find . -name "package.json" -type f
+
     - name: Install dependencies
       working-directory: ./projet-gestion-maitre
       run: |
+        echo "Current directory: $(pwd)"
+        echo "Contents:"
+        ls -la
         npm install
         # Setup macOS build environment
         npm run setup:macos
