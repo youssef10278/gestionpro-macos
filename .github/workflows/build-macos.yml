@@ -54,18 +54,29 @@ jobs:
         brew install pkg-config cairo pango
         # Skip optional dependencies to reduce build time
 
-    - name: Cache node modules
-      uses: actions/cache@v3
-      with:
-        path: projet-gestion-maitre/node_modules
-        key: ${{ runner.os }}-node-${{ hashFiles('projet-gestion-maitre/package.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-
+    # Disable node_modules cache to avoid Node.js version conflicts
+    # - name: Cache node modules
+    #   uses: actions/cache@v3
+    #   with:
+    #     path: projet-gestion-maitre/node_modules
+    #     key: ${{ runner.os }}-node-${{ hashFiles('projet-gestion-maitre/package.json') }}
+    #     restore-keys: |
+    #       ${{ runner.os }}-node-
 
     - name: Install dependencies
       working-directory: ./projet-gestion-maitre
       run: |
+        # Clean any existing node_modules and package-lock to avoid version conflicts
+        rm -rf node_modules package-lock.json
+
+        # Install dependencies fresh
         npm install
+
+        # Force rebuild native modules for current Node.js version (v18)
+        echo "Rebuilding native modules for Node.js v18..."
+        npm rebuild better-sqlite3
+        npm rebuild bcrypt
+
         # Setup macOS build environment
         npm run setup:macos
     
