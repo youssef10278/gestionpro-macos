@@ -50,15 +50,18 @@ jobs:
     
     - name: Setup native compilation environment
       run: |
-        # Install compilation tools
-        brew install python@3.11 node-gyp
+        # Install Python and essential build tools
+        brew install python@3.11 pkg-config cairo pango
+
+        # Install node-gyp globally (not available via brew)
         npm install -g node-gyp
 
         # Configure Python for node-gyp
         npm config set python python3.11
 
-        # Install essential dependencies for native modules
-        brew install pkg-config cairo pango
+        # Verify installation
+        node-gyp --version
+        python3.11 --version
 
     # Disable node_modules cache to avoid Node.js version conflicts
     # - name: Cache node modules
