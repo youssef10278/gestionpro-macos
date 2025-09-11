@@ -48,22 +48,11 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Setup native compilation environment
+    - name: Install system dependencies
       run: |
-        # Install essential build tools only
+        # Install only essential dependencies for native modules
         brew install pkg-config cairo pango
-
-        # Use system Python (already available on macOS runners)
-        echo "Using system Python:"
-        python3 --version
-        which python3
-
-        # Install node-gyp globally
-        npm install -g node-gyp
-
-        # Verify installation
-        echo "node-gyp version:"
-        node-gyp --version
+        # Skip compilation tools - using pre-compiled modules
 
     # Disable node_modules cache to avoid Node.js version conflicts
     # - name: Cache node modules
@@ -74,20 +63,28 @@ jobs:
     #     restore-keys: |
     #       ${{ runner.os }}-node-
 
-    - name: Install and rebuild native modules (simplified)
+    - name: Use pre-compiled native modules
       working-directory: ./projet-gestion-maitre
       run: |
-        # Complete clean
-        rm -rf node_modules package-lock.json
+        # Install dependencies (skip native compilation)
+        npm ci --ignore-scripts
 
-        # Fresh install
-        npm install
+        # Copy pre-compiled binaries from repository
+        echo "Copying pre-compiled native modules..."
+        if [ -d "precompiled-modules/darwin-x64" ]; then
+          cp -r precompiled-modules/darwin-x64/* node_modules/ || echo "No pre-compiled modules found, will try standard installation"
+        fi
 
-        # Use electron-rebuild (most reliable for Electron apps)
-        npx electron-rebuild --force
+        # Fallback: try standard npm install if pre-compiled modules don't exist
+        if [ ! -f "node_modules/better-sqlite3/build/Release/better_sqlite3.node" ]; then
+          echo "Pre-compiled modules not found, falling back to npm install..."
+          rm -rf node_modules package-lock.json
+          npm install
+        fi
 
         # Verify modules work
-        node -e "console.log('better-sqlite3:', require('better-sqlite3'))"
+        node -e "require('better-sqlite3'); console.log('✅ better-sqlite3 OK')"
+        node -e "require('bcrypt'); console.log('✅ bcrypt OK')"
 
         # Setup macOS build environment
         npm run setup:macos

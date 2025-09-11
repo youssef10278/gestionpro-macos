@@ -1,0 +1,7 @@
+{
+  "name": "better-sqlite3",
+  "version": "8.7.0",
+  "description": "Pre-compiled better-sqlite3 for macOS",
+  "main": "lib/index.js",
+  "note": "This is a placeholder - real modules should be generated on macOS"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "bcrypt",
+  "version": "5.1.0",
+  "description": "Pre-compiled bcrypt for macOS",
+  "main": "bcrypt.js",
+  "note": "This is a placeholder - real modules should be generated on macOS"
+}
