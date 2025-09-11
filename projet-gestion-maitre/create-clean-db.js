@@ -1,28 +1,13 @@
 const path = require('path');
 const fs = require('fs');
+const DatabaseAdapter = require('./src/database/DatabaseAdapter');
+const CryptoAdapter = require('./src/utils/CryptoAdapter');
 
 console.log('🧹 Création d\'une base de données vierge pour les clients...');
 
-// Test des modules natifs avec gestion d'erreur
-let Database, bcrypt;
-
-try {
-    Database = require('better-sqlite3');
-    console.log('✅ better-sqlite3 loaded successfully');
-} catch (error) {
-    console.error('❌ Failed to load better-sqlite3:', error.message);
-    console.error('Make sure native modules are properly compiled for your Node.js version');
-    process.exit(1);
-}
-
-try {
-    bcrypt = require('bcrypt');
-    console.log('✅ bcrypt loaded successfully');
-} catch (error) {
-    console.error('❌ Failed to load bcrypt:', error.message);
-    console.error('Make sure native modules are properly compiled for your Node.js version');
-    process.exit(1);
-}
+// Utilisation des adaptateurs JavaScript purs (pas de modules natifs)
+console.log('✅ DatabaseAdapter (sql.js) loaded successfully');
+console.log('✅ CryptoAdapter (crypto-js) loaded successfully');
 
 // Chemin vers la base de données vierge
 const cleanDbPath = path.join(__dirname, 'database', 'main-clean.db');
@@ -38,11 +23,16 @@ if (fs.existsSync(cleanDbPath)) {
     fs.unlinkSync(cleanDbPath);
 }
 
-// Créer une nouvelle base de données vierge
-const db = new Database(cleanDbPath);
+// Créer une nouvelle base de données vierge avec l'adaptateur
+const db = new DatabaseAdapter(cleanDbPath);
 
-// Initialiser les tables vides
-db.exec(`
+async function createCleanDatabase() {
+    try {
+        // Initialiser la base de données
+        await db.init();
+
+        // Initialiser les tables vides
+        db.exec(`
     PRAGMA foreign_keys = ON;
 
     CREATE TABLE IF NOT EXISTS products (
@@ -130,30 +120,45 @@ db.exec(`
         date DATE NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-`);
+        `);
 
-// Créer un utilisateur administrateur par défaut
-const defaultPassword = 'admin123';
-const hashedPassword = bcrypt.hashSync(defaultPassword, 10);
+        // Créer un utilisateur administrateur par défaut
+        const defaultPassword = 'admin123';
+        const hashedPassword = CryptoAdapter.hashSync(defaultPassword, 10);
 
-db.prepare(`
-    INSERT INTO users (username, password, role) 
-    VALUES (?, ?, ?)
-`).run('admin', hashedPassword, 'Propriétaire');
+        db.run(`
+            INSERT INTO users (username, password, role)
+            VALUES (?, ?, ?)
+        `, ['admin', hashedPassword, 'Propriétaire']);
 
-// Ajouter quelques paramètres par défaut
-const settingsStmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
-settingsStmt.run('company_name', 'Mon Entreprise');
-settingsStmt.run('company_address', '');
-settingsStmt.run('company_phone', '');
-settingsStmt.run('tax_rate', '20');
-settingsStmt.run('currency', 'MAD');
-settingsStmt.run('language', 'fr');
-settingsStmt.run('theme', 'light');
+        // Ajouter quelques paramètres par défaut
+        const settings = [
+            ['company_name', 'Mon Entreprise'],
+            ['company_address', ''],
+            ['company_phone', ''],
+            ['tax_rate', '20'],
+            ['currency', 'MAD'],
+            ['language', 'fr'],
+            ['theme', 'light']
+        ];
 
-db.close();
+        settings.forEach(([key, value]) => {
+            db.run('INSERT INTO settings (key, value) VALUES (?, ?)', [key, value]);
+        });
 
-console.log('✅ Base de données vierge créée avec succès !');
-console.log(`📍 Emplacement: ${cleanDbPath}`);
-console.log('👤 Utilisateur par défaut: admin / admin123');
-console.log('🏢 Nom d\'entreprise par défaut: Mon Entreprise');
+        // Sauvegarder et fermer
+        db.close();
+
+        console.log('✅ Base de données vierge créée avec succès !');
+        console.log(`📍 Emplacement: ${cleanDbPath}`);
+        console.log('👤 Utilisateur par défaut: admin / admin123');
+        console.log('🏢 Nom d\'entreprise par défaut: Mon Entreprise');
+
+    } catch (error) {
+        console.error('❌ Erreur lors de la création de la base de données:', error);
+        process.exit(1);
+    }
+}
+
+// Exécuter la fonction
+createCleanDatabase();
