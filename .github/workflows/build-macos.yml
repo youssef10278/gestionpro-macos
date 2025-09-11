@@ -56,12 +56,19 @@ jobs:
         # Install node-gyp globally (not available via brew)
         npm install -g node-gyp
 
-        # Configure Python for node-gyp
-        npm config set python python3.11
+        # Configure Python for node-gyp (correct syntax)
+        npm config set python $(which python3.11)
+
+        # Set environment variables for native compilation
+        export PYTHON=$(which python3.11)
 
         # Verify installation
+        echo "node-gyp version:"
         node-gyp --version
+        echo "Python version:"
         python3.11 --version
+        echo "Python path for npm:"
+        npm config get python
 
     # Disable node_modules cache to avoid Node.js version conflicts
     # - name: Cache node modules
