@@ -19,8 +19,9 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18.x'
-        cache: 'npm'
-        cache-dependency-path: 'projet-gestion-maitre/package-lock.json'
+        # Disable npm cache for now since package-lock.json is not in the expected location
+        # cache: 'npm'
+        # cache-dependency-path: 'projet-gestion-maitre/package-lock.json'
     
     - name: Setup Python
       uses: actions/setup-python@v4
@@ -33,7 +34,7 @@ jobs:
     
     - name: Install npm dependencies
       working-directory: ./projet-gestion-maitre
-      run: npm ci
+      run: npm install
     
     - name: Test macOS setup script
       working-directory: ./projet-gestion-maitre

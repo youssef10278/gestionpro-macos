@@ -39,8 +39,9 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-        cache-dependency-path: 'projet-gestion-maitre/package-lock.json'
+        # Disable npm cache for now since package-lock.json is not in the expected location
+        # cache: 'npm'
+        # cache-dependency-path: 'projet-gestion-maitre/package-lock.json'
     
     - name: Setup Python (for native modules)
       uses: actions/setup-python@v4
@@ -58,14 +59,14 @@ jobs:
       uses: actions/cache@v3
       with:
         path: projet-gestion-maitre/node_modules
-        key: ${{ runner.os }}-node-${{ hashFiles('projet-gestion-maitre/package-lock.json') }}
+        key: ${{ runner.os }}-node-${{ hashFiles('projet-gestion-maitre/package.json') }}
         restore-keys: |
           ${{ runner.os }}-node-
 
     - name: Install dependencies
       working-directory: ./projet-gestion-maitre
       run: |
-        npm ci
+        npm install
         # Setup macOS build environment
         npm run setup:macos
     
